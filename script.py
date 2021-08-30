@@ -12,6 +12,7 @@ imgList = []
 seList = []
 bgmList = []
 comicDataList = []
+max_param = 0
 varList = []
 btnList = []
 byteArr = []
@@ -596,28 +597,28 @@ cmd = [
 
 class Scrollbarframe():
     def __init__(self, parent):
-        self.canvas = Canvas(parent, width=parent.winfo_width(), height=parent.winfo_height())
-        self.frame = Frame(self.canvas)
-        self.frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.frame = Frame(parent)
+        self.frame.pack(expand=True, fill=BOTH)
 
-        self.scrollbar_x = Scrollbar(parent, orient=HORIZONTAL, command=self.canvas.xview)
+        self.tree = ttk.Treeview(self.frame)
+
+        self.scrollbar_x = Scrollbar(self.frame, orient=HORIZONTAL, command=self.tree.xview)
+        self.tree.configure(xscrollcommand=lambda f, l: self.scrollbar_x.set(f, l))
         self.scrollbar_x.pack(side=BOTTOM, fill=X)
 
-        self.scrollbar_y = Scrollbar(parent, orient=VERTICAL, command=self.canvas.yview)
+        self.scrollbar_y = Scrollbar(self.frame, orient=VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=lambda f, l: self.scrollbar_y.set(f, l))
         self.scrollbar_y.pack(side=RIGHT, fill=Y)
+
+        self.tree.pack(expand=True, fill=BOTH)
         
-        self.canvas.create_window((0,0), window=self.frame, anchor="nw")
-        self.canvas.configure(xscrollcommand=self.scrollbar_x.set)
-        self.canvas.configure(yscrollcommand=self.scrollbar_y.set)
-        self.canvas.pack()
-
-        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
-
-    def _on_mousewheel(self, event):
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
 def decryptScript(line):
+    global imgList
+    global seList
+    global bgmList
     global comicDataList
+    global max_param
     size = len(line)
     index = 16
     header = line[0:index]
@@ -675,7 +676,6 @@ def decryptScript(line):
             return None
         comicData = []
         comicData.append(i)
-        comicData.append(hex(index))
         num2 = struct.unpack("<h", line[index:index+2])[0]
         index += 2
         if num2 < 0 or num2 >= len(cmd)-1:
@@ -687,6 +687,8 @@ def decryptScript(line):
         index += 1
         if b >= 16:
             b = 16
+        if max_param < b:
+            max_param = b
         comicData.append(b)
         for j in range(b):
             f = struct.unpack("<f", line[index:index+4])[0]
@@ -696,31 +698,41 @@ def decryptScript(line):
         comicDataList.append(comicData)
 
 def createWidget():
-    width = scriptLf.winfo_width()
-    height = scriptLf.winfo_height()
+    global comicDataList
+    global max_param
     frame = Scrollbarframe(scriptLf)
 
-    tree = ttk.Treeview(frame.frame)
-    tree['columns'] = ('Name','ID','Favorite Pizza', 'aa')
-    tree.column('#0',width=0, stretch='no')
-    tree.column('Name', anchor='w', width=int(width/4))
-    tree.column('ID',anchor='center', width=int(width/4))
-    tree.column('Favorite Pizza', anchor='w', width=int(width/4))
-    tree.column('', anchor='w', width=int(width/4))
+    col_tuple = ('番号', 'コマンド名')
+    paramList = []
+    for i in range(max_param):
+        paramList.append("param{0}".format(i+1))
+    col_tuple = col_tuple + tuple(paramList)
 
-    tree.heading('#0',text='Label',anchor='w')
-    tree.heading('Name', text='Name',anchor='w')
-    tree.heading('ID', text='ID', anchor='center')
-    tree.heading('Favorite Pizza',text='Favorite Pizza', anchor='w')
+    frame.tree['columns'] = col_tuple
+    
+    frame.tree.column('#0',width=0, stretch='no')
+    frame.tree.column('番号', anchor=CENTER, width=50)
+    frame.tree.column('コマンド名',anchor=CENTER, width=100)
+    for i in range(max_param):
+        col_name = "param{0}".format(i+1)
+        frame.tree.column(col_name, anchor=CENTER, width=100)
 
-    tree.insert(parent='', index='end', iid=0 ,values=('John',1,'Peperoni', 22))
-    tree.insert(parent='', index='end', iid=1 ,values=('Mary','2','Cheese', 22))
-    tree.insert(parent='', index='end', iid=2, values=('Tina','3','Ham'))
-    tree.insert(parent='', index='end', iid=3, values=('Bob','4','Supreme'))
-    tree.insert(parent='', index='end', iid=4, values=('Erin','5','Cheese', 22))
-    tree.insert(parent='', index='end', iid=5, values=('Wes','600','Onion'))
+    frame.tree.heading('番号', text='番号',anchor=CENTER)
+    frame.tree.heading('コマンド名', text='コマンド名', anchor=CENTER)
+    for i in range(max_param):
+        col_name = "param{0}".format(i+1)
+        frame.tree.heading(col_name,text=col_name, anchor=CENTER)
 
-    tree.pack(fill=BOTH, expand=True, padx=10,pady=10)
+    index = 0
+    for comicData in comicDataList:
+        data = (comicData[0], comicData[1])
+        paramCnt = comicData[2]
+        paramList = []
+        for i in range(paramCnt):
+            paramList.append(comicData[3+i])
+        data = data + tuple(paramList)
+        frame.tree.insert(parent='', index='end', iid=index ,values=data)
+        index += 1
 
 def openFile():
     global byteArr
