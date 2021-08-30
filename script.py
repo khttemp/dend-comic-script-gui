@@ -614,6 +614,7 @@ class Scrollbarframe():
 
 class inputDialog(sd.Dialog):
     def body(self, master):
+        self.resizable(False, False)
         self.cmdLb = ttk.Label(master, text="コマンド名", width=12, font=("", 14))
         self.cmdLb.grid(row=0, column=0, sticky=N+S)
         self.v_cmd = StringVar()
@@ -637,12 +638,19 @@ class inputDialog(sd.Dialog):
         self.paramFrame = ttk.Frame(master)
         self.paramFrame.grid(columnspan=2, row=3, column=0, sticky=N+E+W+S)
 
+        self.paramLb = ttk.Label(self.paramFrame)
+        self.paramLb.grid(row=0, column=0)
+
         self.paramCntCb.bind('<<ComboboxSelected>>', lambda e: self.selectParam(self.v_paramCnt.get(), self.paramFrame))
 
     def selectParam(self, paramCnt, frame):
         children = frame.winfo_children()
         for child in children:
             child.destroy()
+
+        if paramCnt == 0:
+            self.paramLb = ttk.Label(frame)
+            self.paramLb.grid(row=0, column=0)
 
         for i in range(paramCnt):
             self.paramLb = ttk.Label(frame, text="param{0}".format(i+1), font=("", 14))
@@ -731,6 +739,7 @@ def decryptScript(line):
         for j in range(b):
             f = struct.unpack("<f", line[index:index+4])[0]
             index += 4
+            f = round(f, 5)
             comicData.append(f)
         
         comicDataList.append(comicData)
@@ -772,8 +781,6 @@ def createWidget():
         frame.tree.insert(parent='', index='end', iid=index ,values=data)
         index += 1
 
-    inputDialog(root)
-
 def openFile():
     global byteArr
     global file_path
@@ -785,6 +792,7 @@ def openFile():
             file = open(file_path, "rb")
             line = file.read()
             byteArr = bytearray(line)
+            deleteWidget()
             decryptScript(line)
             createWidget()
             file.close()
