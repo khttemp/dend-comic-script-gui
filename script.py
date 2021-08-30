@@ -597,20 +597,58 @@ cmd = [
 
 class Scrollbarframe():
     def __init__(self, parent):
-        self.frame = Frame(parent)
+        self.frame = ttk.Frame(parent)
         self.frame.pack(expand=True, fill=BOTH)
 
         self.tree = ttk.Treeview(self.frame)
 
-        self.scrollbar_x = Scrollbar(self.frame, orient=HORIZONTAL, command=self.tree.xview)
+        self.scrollbar_x = ttk.Scrollbar(self.frame, orient=HORIZONTAL, command=self.tree.xview)
         self.tree.configure(xscrollcommand=lambda f, l: self.scrollbar_x.set(f, l))
         self.scrollbar_x.pack(side=BOTTOM, fill=X)
 
-        self.scrollbar_y = Scrollbar(self.frame, orient=VERTICAL, command=self.tree.yview)
+        self.scrollbar_y = ttk.Scrollbar(self.frame, orient=VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=lambda f, l: self.scrollbar_y.set(f, l))
         self.scrollbar_y.pack(side=RIGHT, fill=Y)
 
         self.tree.pack(expand=True, fill=BOTH)
+
+class inputDialog(sd.Dialog):
+    def body(self, master):
+        self.cmdLb = ttk.Label(master, text="コマンド名", width=12, font=("", 14))
+        self.cmdLb.grid(row=0, column=0, sticky=N+S)
+        self.v_cmd = StringVar()
+        cmdCopy = copy.deepcopy(cmd)
+        cmdCopy.sort()
+        self.cmdCb = ttk.Combobox(master, textvariable=self.v_cmd, width=30, value=cmdCopy)
+        self.cmdCb.grid(row=0, column=1, sticky=N+S, pady=10)
+        self.v_cmd.set(cmdCopy[0])
+
+        self.paramCntLb = ttk.Label(master, text="パラメータ数", width=12, font=("", 14))
+        self.paramCntLb.grid(row=1, column=0, sticky=N+S)
+        self.v_paramCnt = IntVar()
+        paramCntList = [cnt for cnt in range(17)]
+        self.paramCntCb = ttk.Combobox(master, textvariable=self.v_paramCnt, width=30, value=paramCntList)
+        self.paramCntCb.grid(row=1, column=1, sticky=N+S, pady=10)
+        self.v_paramCnt.set(0)
+
+        self.xLine = ttk.Separator(master, orient=HORIZONTAL)
+        self.xLine.grid(columnspan=2, row=2, column=0, sticky=E+W)
+
+        self.paramFrame = ttk.Frame(master)
+        self.paramFrame.grid(columnspan=2, row=3, column=0, sticky=N+E+W+S)
+
+        self.paramCntCb.bind('<<ComboboxSelected>>', lambda e: self.selectParam(self.v_paramCnt.get(), self.paramFrame))
+
+    def selectParam(self, paramCnt, frame):
+        children = frame.winfo_children()
+        for child in children:
+            child.destroy()
+
+        for i in range(paramCnt):
+            self.paramLb = ttk.Label(frame, text="param{0}".format(i+1), font=("", 14))
+            self.paramLb.grid(row=i, column=0, sticky=N+S)
+            self.paramEt = ttk.Entry(frame, width=30)
+            self.paramEt.grid(row=i, column=1, sticky=N+S)
         
 
 def decryptScript(line):
@@ -733,6 +771,8 @@ def createWidget():
         data = data + tuple(paramList)
         frame.tree.insert(parent='', index='end', iid=index ,values=data)
         index += 1
+
+    inputDialog(root)
 
 def openFile():
     global byteArr
