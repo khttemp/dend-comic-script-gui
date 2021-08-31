@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import sys
 import struct
 import copy
 from tkinter import *
@@ -12,11 +13,13 @@ imgList = []
 seList = []
 bgmList = []
 comicDataList = []
+indexList = []
 max_param = 0
 varList = []
 btnList = []
 byteArr = []
 file_path = ""
+frame = None
 
 cmd = [
     "Tx",
@@ -600,7 +603,7 @@ class Scrollbarframe():
         self.frame = ttk.Frame(parent)
         self.frame.pack(expand=True, fill=BOTH)
 
-        self.tree = ttk.Treeview(self.frame)
+        self.tree = ttk.Treeview(self.frame, selectmode="browse")
 
         self.scrollbar_x = ttk.Scrollbar(self.frame, orient=HORIZONTAL, command=self.tree.xview)
         self.tree.configure(xscrollcommand=lambda f, l: self.scrollbar_x.set(f, l))
@@ -611,8 +614,32 @@ class Scrollbarframe():
         self.scrollbar_y.pack(side=RIGHT, fill=Y)
 
         self.tree.pack(expand=True, fill=BOTH)
+        self.tree.bind("<<TreeviewSelect>>", self.treeSelect)
+    def treeSelect(self, event):
+        selectId = self.tree.selection()[0]
+        selectItem = self.tree.set(selectId)
+        editLineBtn['state'] = 'normal'
+        insertLineBtn['state'] = 'normal'
+        deleteLineBtn['state'] = 'normal'
+        v_select.set(selectItem["番号"])
+        
 
 class inputDialog(sd.Dialog):
+    def __init__(self, master, num, cmdItem=None):
+        self.v_paramList = []
+        self.num = num
+        self.cmdItem = cmdItem
+        if self.cmdItem != None:
+            self.mode = "edit"
+            self.infoMsg = "このまま修正してもよろしいですか？"
+            self.p_cmd = self.cmdItem["コマンド名"]
+            self.p_cnt = len(self.cmdItem)-2
+        else:
+            self.mode = "insert"
+            self.infoMsg = "このまま挿入してもよろしいですか？"
+            self.p_cmd = None
+            self.p_cnt = None
+        super().__init__(master)
     def body(self, master):
         self.resizable(False, False)
         self.cmdLb = ttk.Label(master, text="コマンド名", width=12, font=("", 14))
@@ -620,17 +647,23 @@ class inputDialog(sd.Dialog):
         self.v_cmd = StringVar()
         cmdCopy = copy.deepcopy(cmd)
         cmdCopy.sort()
-        self.cmdCb = ttk.Combobox(master, textvariable=self.v_cmd, width=30, value=cmdCopy)
+        self.cmdCb = ttk.Combobox(master, textvariable=self.v_cmd, width=30, state="readonly", value=cmdCopy)
         self.cmdCb.grid(row=0, column=1, sticky=N+S, pady=10)
-        self.v_cmd.set(cmdCopy[0])
+        if self.p_cmd != None:
+            self.v_cmd.set(self.p_cmd)
+        else:
+            self.v_cmd.set(cmdCopy[0])
 
         self.paramCntLb = ttk.Label(master, text="パラメータ数", width=12, font=("", 14))
         self.paramCntLb.grid(row=1, column=0, sticky=N+S)
         self.v_paramCnt = IntVar()
         paramCntList = [cnt for cnt in range(17)]
-        self.paramCntCb = ttk.Combobox(master, textvariable=self.v_paramCnt, width=30, value=paramCntList)
+        self.paramCntCb = ttk.Combobox(master, textvariable=self.v_paramCnt, width=30, state="readonly", value=paramCntList)
         self.paramCntCb.grid(row=1, column=1, sticky=N+S, pady=10)
-        self.v_paramCnt.set(0)
+        if self.p_cnt != None:
+            self.v_paramCnt.set(self.p_cnt)
+        else:
+            self.v_paramCnt.set(0)
 
         self.xLine = ttk.Separator(master, orient=HORIZONTAL)
         self.xLine.grid(columnspan=2, row=2, column=0, sticky=E+W)
@@ -642,8 +675,11 @@ class inputDialog(sd.Dialog):
         self.paramLb.grid(row=0, column=0)
 
         self.paramCntCb.bind('<<ComboboxSelected>>', lambda e: self.selectParam(self.v_paramCnt.get(), self.paramFrame))
+        if self.p_cnt != 0:
+            self.selectParam(self.v_paramCnt.get(), self.paramFrame, self.cmdItem)
 
-    def selectParam(self, paramCnt, frame):
+    def selectParam(self, paramCnt, frame, cmdItem=None):
+        self.v_paramList = []
         children = frame.winfo_children()
         for child in children:
             child.destroy()
@@ -655,8 +691,52 @@ class inputDialog(sd.Dialog):
         for i in range(paramCnt):
             self.paramLb = ttk.Label(frame, text="param{0}".format(i+1), font=("", 14))
             self.paramLb.grid(row=i, column=0, sticky=N+S)
-            self.paramEt = ttk.Entry(frame, width=30)
+            v_param = DoubleVar()
+            self.v_paramList.append(v_param)
+            self.paramEt = ttk.Entry(frame, textvariable=v_param, width=30)
             self.paramEt.grid(row=i, column=1, sticky=N+S)
+        if cmdItem != None:
+            for i in range(len(self.v_paramList)):
+                self.v_paramList[i].set(cmdItem["param{0}".format(i+1)])
+
+    def buttonbox(self):
+        box = Frame(self, padx=5, pady=5)
+        self.okBtn = Button(box, text="OK", width=10, command=self.okPress)
+        self.okBtn.grid(row=0, column=0, padx=5)
+        self.cancelBtn = Button(box, text="Cancel", width=10, command=self.cancel)
+        self.cancelBtn.grid(row=0, column=1, padx=5)
+        box.pack()
+
+    def okPress(self):
+        editParamList = []
+        try:
+            try:
+                for var in self.v_paramList:
+                    num = float(var.get())
+                    editParamList.append(num)
+            except:
+                errorMsg = "数字で入力してください。"
+                mb.showerror(title="数字エラー", message=errorMsg)
+            result = mb.askokcancel(title="確認", message=self.infoMsg)
+            if result:
+                self.ok()
+                comicData = []
+                comicData.append(self.v_cmd.get())
+                comicData.append(self.v_paramCnt.get())
+                for i in range(self.v_paramCnt.get()):
+                    comicData.append(editParamList[i])
+
+                if self.mode == "edit":
+                    comicDataList[self.num] = comicData
+                elif self.mode == "insert":
+                    comicDataList.insert(self.num+1, comicData)
+
+                saveFile(comicDataList)
+                reloadFile()
+        except Exception as e:
+            print(e)
+            errorMsg = "予想外のエラーです"
+            mb.showerror(title="エラー", message=errorMsg)
         
 
 def decryptScript(line):
@@ -664,6 +744,7 @@ def decryptScript(line):
     global seList
     global bgmList
     global comicDataList
+    global indexList
     global max_param
     size = len(line)
     index = 16
@@ -716,12 +797,12 @@ def decryptScript(line):
     
     count = 0
     for i in range(comicDataCnt):
+        indexList.append(index)
         if index >= size:
             errorMsg = "注意！設定したコマンド数({0})は、書き込んだコマンド数({1})より多く読もうとしています。".format(comicDataCnt, count)
             mb.showerror(title="エラー", message=errorMsg)
             return None
         comicData = []
-        comicData.append(i)
         num2 = struct.unpack("<h", line[index:index+2])[0]
         index += 2
         if num2 < 0 or num2 >= len(cmd)-1:
@@ -747,6 +828,7 @@ def decryptScript(line):
 def createWidget():
     global comicDataList
     global max_param
+    global frame
     frame = Scrollbarframe(scriptLf)
 
     col_tuple = ('番号', 'コマンド名')
@@ -759,7 +841,7 @@ def createWidget():
     
     frame.tree.column('#0',width=0, stretch='no')
     frame.tree.column('番号', anchor=CENTER, width=50)
-    frame.tree.column('コマンド名',anchor=CENTER, width=100)
+    frame.tree.column('コマンド名',anchor=CENTER, width=120)
     for i in range(max_param):
         col_name = "param{0}".format(i+1)
         frame.tree.column(col_name, anchor=CENTER, width=100)
@@ -772,11 +854,11 @@ def createWidget():
 
     index = 0
     for comicData in comicDataList:
-        data = (comicData[0], comicData[1])
-        paramCnt = comicData[2]
+        data = (index, comicData[0])
+        paramCnt = comicData[1]
         paramList = []
         for i in range(paramCnt):
-            paramList.append(comicData[3+i])
+            paramList.append(comicData[2+i])
         data = data + tuple(paramList)
         frame.tree.insert(parent='', index='end', iid=index ,values=data)
         index += 1
@@ -799,17 +881,110 @@ def openFile():
         except Exception as e:
             print(e)
             mb.showerror(title="エラー", message=errorMsg)
+
+def editLine():
+    global frame
+    selectId = frame.tree.selection()[0]
+    selectItem = frame.tree.set(selectId)
+    inputDialog(root, int(selectItem["番号"]), selectItem)
+
+def insertLine():
+    global frame
+    selectId = frame.tree.selection()[0]
+    selectItem = frame.tree.set(selectId)
+    inputDialog(root, int(selectItem["番号"]))
+
+def deleteLine():
+    global frame
+    global comicDataList
+    selectId = int(frame.tree.selection()[0])
+    warnMsg = "選択した行を削除します。\nそれでもよろしいですか？"
+    result = mb.askokcancel(title="警告", message=warnMsg, icon="warning")
+    if result:
+        del comicDataList[selectId]
+        saveFile(comicDataList)
+        reloadFile()
         
+
+def saveFile(comicDataList):
+    global byteArr
+    global file_path
+    newByteArr = copy.deepcopy(byteArr)
+    index = indexList[0]
+    index -= 2
+    newByteArr = newByteArr[0:index]
+
+    cmdCnt = struct.pack("<h", len(comicDataList))
+    for n in cmdCnt:
+        newByteArr.insert(index, n)
+        index += 1
+
+    for comicData in comicDataList:
+        cmdNum = struct.pack("<h", cmd.index(comicData[0]))
+        for n in cmdNum:
+            newByteArr.insert(index, n)
+            index += 1
+
+        paramCnt = comicData[1]
+        byteParam = struct.pack("<c", paramCnt.to_bytes(1, 'big'))
+        for n in byteParam:
+            newByteArr.insert(index, n)
+            index += 1
+
+        for i in range(paramCnt):
+            f = struct.pack("<f", comicData[2+i])
+            for n in f:
+                newByteArr.insert(index, n)
+                index += 1
+
+    w = open(file_path, "wb")
+    w.write(newByteArr)
+    w.close()
+    mb.showinfo(title="成功", message="スクリプトを改造しました")
+
+def reloadFile():
+    global byteArr
+    global file_path
+    errorMsg = "予想外のエラーが出ました。\n電車でDのファイルではない、またはファイルが壊れた可能性があります。"
+    if file_path:
+        try:
+            file = open(file_path, "rb")
+            line = file.read()
+            byteArr = bytearray(line)
+            deleteWidget()
+            decryptScript(line)
+            createWidget()
+            file.close()
+        except Exception as e:
+            print(e)
+            mb.showerror(title="エラー", message=errorMsg)
+
 root = Tk()
 root.title("電車でD ComicScript 改造")
-root.geometry("1024x768")
+root.geometry("900x450")
 
 menubar = Menu(root)
 menubar.add_cascade(label='ファイルを開く', command= lambda: openFile())
 root.config(menu=menubar)
 
+selectLb = ttk.Label(text="選択した行番号：", font=("",14))
+selectLb.place(relx=0.05, rely=0.03)
+
+v_select = StringVar()
+selectEt = ttk.Entry(root, textvariable=v_select, font=("",14), width=5, state="readonly")
+selectEt.place(relx=0.22, rely=0.03)
+
+editLineBtn = ttk.Button(root, text="選択した行を修正する", width=25, state="disabled", command=editLine)
+editLineBtn.place(relx=0.32, rely=0.03)
+
+insertLineBtn = ttk.Button(root, text="選択した行の次に挿入する", width=25, state="disabled", command=insertLine)
+insertLineBtn.place(relx=0.54, rely=0.03)
+
+deleteLineBtn = ttk.Button(root, text="選択した行を削除する", width=25, state="disabled", command=deleteLine)
+deleteLineBtn.place(relx=0.76, rely=0.03)
+
 scriptLf = ttk.LabelFrame(root, text="スクリプト内容")
-scriptLf.place(relx=0.05, rely=0.05, relwidth=0.9, relheight=0.9)
+scriptLf.place(relx=0.05, rely=0.1, relwidth=0.9, relheight=0.86)
 
 def deleteWidget():
     global scriptLf
@@ -817,6 +992,7 @@ def deleteWidget():
     global seList
     global bgmList
     global comicDataList
+    global indexList
     children = scriptLf.winfo_children()
     for child in children:
         child.destroy()
@@ -825,5 +1001,10 @@ def deleteWidget():
     seList = []
     bgmList = []
     comicDataList = []
+    indexList = []
+    v_select.set("")
+    editLineBtn['state'] = 'disabled'
+    insertLineBtn['state'] = 'disabled'
+    deleteLineBtn['state'] = 'disabled'
 
 root.mainloop()
