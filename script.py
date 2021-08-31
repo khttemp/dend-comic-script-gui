@@ -1010,7 +1010,7 @@ def saveFile(comicDataList):
 def reloadFile():
     global byteArr
     global file_path
-    errorMsg = "予想外のエラーが出ました。\n電車でDのファイルではない、またはファイルが壊れた可能性があります。"
+    errorMsg = "予想外のエラーが出ました。\n電車でDのコミックスクリプトではない、またはファイルが壊れた可能性があります。"
     if file_path:
         try:
             filename = os.path.basename(file_path)
