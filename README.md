@@ -154,5 +154,8 @@ pyinstaller か py2exe ライブラリをインストールする。 pip でも 
 
 dist フォルダーが作られて、 script.exe が出力される。
 
+### Virustotal
+
+![virustotal](https://github.com/khttemp/dend-comic-script-gui/blob/main/image/virustotal.png)
 
 以上。
