@@ -594,6 +594,8 @@ cmd = [
     "STORY_GOTO",
     "PLAY223HONE",
     "RB26",
+    "PLAYORGSE",
+    "H2300_GOAL",
     "SCRIPT_CMD_MAX"
 ]
 
@@ -1027,7 +1029,7 @@ def reloadFile():
             mb.showerror(title="エラー", message=errorMsg)
 
 root = Tk()
-root.title("電車でD ComicScript 改造")
+root.title("電車でD ComicScript 改造 1.1.2")
 root.geometry("900x550")
 
 menubar = Menu(root)
