@@ -726,8 +726,9 @@ class inputDialog(sd.Dialog):
                 editParamList.append(num)
         except:
             errorMsg = "数字で入力してください。"
-            mb.showerror(title="数字エラー", message=errorMsg)
-        result = mb.askokcancel(title="確認", message=self.infoMsg)
+            mb.showerror(title="数字エラー", message=errorMsg, parent=self)
+            return
+        result = mb.askokcancel(title="確認", message=self.infoMsg, parent=self)
         if result:
             self.ok()
             comicData = []
