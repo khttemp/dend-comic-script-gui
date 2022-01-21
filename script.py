@@ -616,6 +616,9 @@ class Scrollbarframe():
 
         self.tree.pack(expand=True, fill=BOTH)
         self.tree.bind("<<TreeviewSelect>>", self.treeSelect)
+
+        csvExtractBtn['state'] = 'normal'
+        csvLoadAndSaveBtn['state'] = 'normal'
     def treeSelect(self, event):
         selectId = self.tree.selection()[0]
         selectItem = self.tree.set(selectId)
@@ -1029,9 +1032,77 @@ def reloadFile():
             print(e)
             mb.showerror(title="エラー", message=errorMsg)
 
+
+def csvExtractBtn():
+    global comicDataList
+    file = v_fileName.get()
+    filename = os.path.splitext(os.path.basename(file))[0]
+    file_path = fd.asksaveasfilename(initialfile=filename, defaultextension='csv', filetypes=[('comicscript_csv', '*.csv')])
+    errorMsg = "CSVで取り出す機能が失敗しました。\n権限問題の可能性があります。"
+    try:
+        w = open(file_path, "w")
+        for comicData in comicDataList:
+            w.write("{0},".format(comicData[0]))
+            cmdParaCnt = comicData[1]
+            for i in range(cmdParaCnt):
+                w.write("{0}".format(comicData[2 + i]))
+                if i < cmdParaCnt-1:
+                    w.write(",")
+            w.write("\n")
+        w.close()
+        mb.showinfo(title="成功", message="CSVで取り出しました")
+    except Exception as e:
+        print(e)
+        mb.showerror(title="エラー", message=errorMsg)
+        
+
+def csvLoadAndSaveBtn():
+    global comicDataList
+    file_path = fd.askopenfilename(defaultextension='csv', filetypes=[("comicscript_csv", "*.csv")])
+    f = open(file_path)
+    csvLines = f.readlines()
+    f.close()
+
+    csvComicDataList = []
+    for i in range(len(csvLines)):
+        csvComicData = []
+        csvLine = csvLines[i].strip()
+        arr = csvLine.split(",")
+        cmdName = arr[0]
+        if cmdName not in cmd:
+            errorMsg = "{0}行目のコマンド[{1}]は\n存在しないコマンドです".format(i+1, cmdName)
+            mb.showerror(title="エラー", message=errorMsg)
+            break
+
+        comicDataParaList = []
+        for j in range(1, len(arr)):
+            if arr[j] == "":
+                break
+            try:
+                comicDataParaList.append(float(arr[j]))
+            except:
+                errorMsg = "{0}行目のコマンドに\n数字に変換できない要素[{1}]が入ってます".format(i+1, arr[j])
+                mb.showerror(title="エラー", message=errorMsg)
+                return
+
+        csvComicData.append(cmdName)
+        cmdParaCnt = len(comicDataParaList)
+        csvComicData.append(cmdParaCnt)
+        for j in range(len(comicDataParaList)):
+            csvComicData.append(comicDataParaList[j])
+
+        csvComicDataList.append(csvComicData)
+    warnMsg = "選択したCSVで上書きします。\nそれでもよろしいですか？"
+    result = mb.askokcancel(title="警告", message=warnMsg, icon="warning")
+
+    if result:
+        comicDataList = csvComicDataList
+        saveFile(comicDataList)
+        
+
 root = Tk()
-root.title("電車でD ComicScript 改造 1.1.2")
-root.geometry("900x550")
+root.title("電車でD ComicScript 改造 1.2.0")
+root.geometry("900x600")
 
 menubar = Menu(root)
 menubar.add_cascade(label='ファイルを開く', command= lambda: openFile())
@@ -1063,8 +1134,14 @@ copyLineBtn.place(relx=0.32, rely=0.11)
 pasteLineBtn = ttk.Button(root, text="選択した行に貼り付けする", width=25, state="disabled", command=pasteLine)
 pasteLineBtn.place(relx=0.54, rely=0.11)
 
+csvExtractBtn = ttk.Button(root, text="CSVで取り出す", width=25, state="disabled", command=csvExtractBtn)
+csvExtractBtn.place(relx=0.32, rely=0.19)
+
+csvLoadAndSaveBtn = ttk.Button(root, text="CSVで上書きする", width=25, state="disabled", command=csvLoadAndSaveBtn)
+csvLoadAndSaveBtn.place(relx=0.54, rely=0.19)
+
 scriptLf = ttk.LabelFrame(root, text="スクリプト内容")
-scriptLf.place(relx=0.05, rely=0.2, relwidth=0.9, relheight=0.76)
+scriptLf.place(relx=0.05, rely=0.25, relwidth=0.9, relheight=0.70)
 
 def deleteWidget():
     global scriptLf
