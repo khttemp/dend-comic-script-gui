@@ -1509,21 +1509,24 @@ def reloadFile():
     errorMsg = "予想外のエラーが出ました。\n電車でDのコミックスクリプトではない、またはファイルが壊れた可能性があります。"
     if file_path:
         try:
+            selectId = -1
             filename = os.path.basename(file_path)
             v_fileName.set(filename)
             file = open(file_path, "rb")
             line = file.read()
             byteArr = bytearray(line)
-            selectId = int(v_select.get())
+            if v_select.get():
+                selectId = int(v_select.get())
             deleteWidget()
             decryptScript(line)
             createWidget()
             file.close()
-            if selectId - 3 < 0:
-                frame.tree.see(0)
-            else:
-                frame.tree.see(selectId-3)
-            frame.tree.selection_set(selectId)
+            if selectId != -1:
+                if selectId - 3 < 0:
+                    frame.tree.see(0)
+                else:
+                    frame.tree.see(selectId-3)
+                frame.tree.selection_set(selectId)
         except Exception as e:
             print(e)
             mb.showerror(title="エラー", message=errorMsg)
@@ -1602,7 +1605,7 @@ def headerFileEditBtn():
     headerFileInfo(root, "ヘッダー情報")
 
 root = Tk()
-root.title("電車でD ComicScript 改造 1.3.0")
+root.title("電車でD ComicScript 改造 1.3.1")
 root.geometry("900x600")
 
 menubar = Menu(root)
