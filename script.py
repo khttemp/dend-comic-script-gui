@@ -1,31 +1,20 @@
 # -*- coding: utf-8 -*-
 
 import os
-import struct
 import copy
-from tkinter import *
+import traceback
 from tkinter import filedialog as fd
-from tkinter import ttk
 from tkinter import messagebox as mb
-from tkinter import simpledialog as sd
 
-originImgList = []
-originImgSizeList = []
-originSeList = []
-originBgmList = []
-imgList = []
-imgSizeList = []
-seList = []
-bgmList = []
-comicDataList = []
-copyComicData = []
-indexList = []
-max_param = 0
-byteArr = []
-file_path = ""
+from importPy.tkinterScrollbarFrameClass import *
+from importPy.tkinterEditClass import *
+from importPy.decrypt import *
+
+decryptFile = None
 frame = None
+copyComicData = None
 
-cmd = [
+cmdList = [
     "Tx",
     "TxSize",
     "Alpha",
@@ -615,797 +604,8 @@ cmd = [
     "SCRIPT_CMD_MAX"
 ]
 
-class Scrollbarframe():
-    def __init__(self, parent):
-        self.frame = ttk.Frame(parent)
-        self.frame.pack(expand=True, fill=BOTH)
-
-        self.tree = ttk.Treeview(self.frame, selectmode="browse")
-
-        self.scrollbar_x = ttk.Scrollbar(self.frame, orient=HORIZONTAL, command=self.tree.xview)
-        self.tree.configure(xscrollcommand=lambda f, l: self.scrollbar_x.set(f, l))
-        self.scrollbar_x.pack(side=BOTTOM, fill=X)
-
-        self.scrollbar_y = ttk.Scrollbar(self.frame, orient=VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscrollcommand=lambda f, l: self.scrollbar_y.set(f, l))
-        self.scrollbar_y.pack(side=RIGHT, fill=Y)
-
-        self.tree.pack(expand=True, fill=BOTH)
-        self.tree.bind("<<TreeviewSelect>>", self.treeSelect)
-
-        csvExtractBtn['state'] = 'normal'
-        csvLoadAndSaveBtn['state'] = 'normal'
-        headerFileEditBtn['state'] = 'normal'
-    def treeSelect(self, event):
-        selectId = self.tree.selection()[0]
-        selectItem = self.tree.set(selectId)
-        editLineBtn['state'] = 'normal'
-        insertLineBtn['state'] = 'normal'
-        deleteLineBtn['state'] = 'normal'
-        copyLineBtn['state'] = 'normal'
-        v_select.set(selectItem["番号"])
-        
-
-class inputDialog(sd.Dialog):
-    def __init__(self, master, num, cmdItem=None):
-        self.v_paramList = []
-        self.num = num
-        self.cmdItem = cmdItem
-        if self.cmdItem != None:
-            self.mode = "edit"
-            self.infoMsg = "このまま修正してもよろしいですか？"
-            self.p_cmd = self.cmdItem["コマンド名"]
-            self.p_cnt = len(self.cmdItem)-2
-        else:
-            self.mode = "insert"
-            self.infoMsg = "このまま挿入してもよろしいですか？"
-            self.p_cmd = None
-            self.p_cnt = None
-        super().__init__(master)
-    def body(self, master):
-        self.resizable(False, False)
-        self.cmdLb = ttk.Label(master, text="コマンド名", width=12, font=("", 14))
-        self.cmdLb.grid(row=0, column=0, sticky=N+S)
-        self.v_cmd = StringVar()
-        cmdCopy = copy.deepcopy(cmd)
-        cmdCopy.sort()
-        self.cmdCb = ttk.Combobox(master, textvariable=self.v_cmd, width=30, state="readonly", value=cmdCopy)
-        self.cmdCb.grid(row=0, column=1, sticky=N+S, pady=10)
-        if self.p_cmd != None:
-            self.v_cmd.set(self.p_cmd)
-        else:
-            self.v_cmd.set(cmdCopy[0])
-
-        self.paramCntLb = ttk.Label(master, text="パラメータ数", width=12, font=("", 14))
-        self.paramCntLb.grid(row=1, column=0, sticky=N+S)
-        self.v_paramCnt = IntVar()
-        paramCntList = [cnt for cnt in range(0, 16)]
-        self.paramCntCb = ttk.Combobox(master, textvariable=self.v_paramCnt, width=30, state="readonly", value=paramCntList)
-        self.paramCntCb.grid(row=1, column=1, sticky=N+S, pady=10)
-        if self.p_cnt != None:
-            self.v_paramCnt.set(self.p_cnt)
-        else:
-            self.v_paramCnt.set(0)
-
-        if self.cmdItem == None:
-            self.position = ttk.Label(master, text="挿入する位置", width=12, font=("", 14))
-            self.position.grid(row=2, column=0, sticky=N+S)
-            self.v_position = StringVar()
-            positionList = ["後", "前"]
-            self.positionCb = ttk.Combobox(master, textvariable=self.v_position, width=30, state="readonly", value=positionList)
-            self.positionCb.grid(row=2, column=1, sticky=N+S, pady=10)
-            self.v_position.set(positionList[0])
-
-        self.xLine = ttk.Separator(master, orient=HORIZONTAL)
-        self.xLine.grid(columnspan=2, row=3, column=0, sticky=E+W, pady=10)
-
-        self.paramFrame = ttk.Frame(master)
-        self.paramFrame.grid(columnspan=2, row=4, column=0, sticky=N+E+W+S)
-
-        self.paramLb = ttk.Label(self.paramFrame)
-        self.paramLb.grid(row=0, column=0)
-
-        self.paramCntCb.bind('<<ComboboxSelected>>', lambda e: self.selectParam(self.v_paramCnt.get(), self.paramFrame))
-        if self.p_cnt != 0:
-            self.selectParam(self.v_paramCnt.get(), self.paramFrame, self.cmdItem)
-
-    def selectParam(self, paramCnt, frame, cmdItem=None):
-        self.v_paramList = []
-        children = frame.winfo_children()
-        for child in children:
-            child.destroy()
-
-        if paramCnt == 0:
-            self.paramLb = ttk.Label(frame)
-            self.paramLb.grid(row=0, column=0)
-
-        for i in range(paramCnt):
-            self.paramLb = ttk.Label(frame, text="param{0}".format(i+1), font=("", 14))
-            self.paramLb.grid(row=i, column=0, sticky=N+S)
-            v_param = DoubleVar()
-            self.v_paramList.append(v_param)
-            self.paramEt = ttk.Entry(frame, textvariable=v_param, width=30)
-            self.paramEt.grid(row=i, column=1, sticky=N+S)
-        if cmdItem != None:
-            for i in range(len(self.v_paramList)):
-                self.v_paramList[i].set(cmdItem["param{0}".format(i+1)])
-
-    def buttonbox(self):
-        box = Frame(self, padx=5, pady=5)
-        self.okBtn = Button(box, text="OK", width=10, command=self.okPress)
-        self.okBtn.grid(row=0, column=0, padx=5)
-        self.cancelBtn = Button(box, text="Cancel", width=10, command=self.cancel)
-        self.cancelBtn.grid(row=0, column=1, padx=5)
-        box.pack()
-
-    def okPress(self):
-        editParamList = []
-        try:
-            for var in self.v_paramList:
-                num = float(var.get())
-                editParamList.append(num)
-        except:
-            errorMsg = "数字で入力してください。"
-            mb.showerror(title="数字エラー", message=errorMsg, parent=self)
-            return
-        result = mb.askokcancel(title="確認", message=self.infoMsg, parent=self)
-        if result:
-            self.ok()
-            comicData = []
-            comicData.append(self.v_cmd.get())
-            comicData.append(self.v_paramCnt.get())
-            for i in range(self.v_paramCnt.get()):
-                comicData.append(editParamList[i])
-
-            if self.mode == "edit":
-                comicDataList[self.num] = comicData
-            elif self.mode == "insert":
-                position = self.v_position.get()
-                if position == "後":
-                    comicDataList.insert(self.num+1, comicData)
-                elif position == "前":
-                    comicDataList.insert(self.num, comicData)
-
-            saveFile(comicDataList)
-
-class pasteDialog(sd.Dialog):
-    def __init__(self, master, num):
-        self.num = num
-        super().__init__(master)
-    def body(self, master):
-        self.resizable(False, False)
-        self.posLb = ttk.Label(master, text="挿入する位置を選んでください", font=("", 14))
-        self.posLb.pack(padx=10, pady=10)
-    def buttonbox(self):
-        box = Frame(self, padx=5, pady=5)
-        self.frontBtn = Button(box, text="前", font=("", 12), width=10, command=self.frontInsert)
-        self.frontBtn.grid(row=0, column=0, padx=5)
-        self.backBtn = Button(box, text="後", font=("", 12), width=10, command=self.backInsert)
-        self.backBtn.grid(row=0, column=1, padx=5)
-        self.cancelBtn = Button(box, text="Cancel", font=("", 12), width=10, command=self.cancel)
-        self.cancelBtn.grid(row=0, column=2, padx=5)
-        box.pack()
-    def frontInsert(self):
-        comicDataList.insert(self.num, copyComicData)
-        self.save()
-    def backInsert(self):
-        comicDataList.insert(self.num+1, copyComicData)
-        self.save()
-    def save(self):
-        self.ok()
-        saveFile(comicDataList)
-
-class headerFileInfo(sd.Dialog):
-    def __init__(self, master, title):
-        super(headerFileInfo, self).__init__(parent=master, title=title)
-
-    def body(self, frame):
-        global imgList
-        global imgSizeList
-        global seList
-        global bgmList
-        global originImgList
-        global originImgSizeList
-        global originSeList
-        global originBgmList
-        
-        self.selectListNum = 0
-        self.selectIndex = 0
-        self.dirtyFlag = False
-        
-        self.btnFrame = Frame(frame, pady=5)
-        self.btnFrame.pack()
-        self.listFrame = Frame(frame)
-        self.listFrame.pack()
-
-        self.modifyBtn = Button(self.btnFrame, font=("", 14), text="修正", state="disabled", command=self.modify)
-        self.modifyBtn.grid(padx=10, row=0, column=0, sticky=W+E)
-        self.insertBtn = Button(self.btnFrame, font=("", 14), text="挿入", state="disabled", command=self.insert)
-        self.insertBtn.grid(padx=10, row=0, column=1, sticky=W+E)
-        self.deleteBtn = Button(self.btnFrame, font=("", 14), text="削除", state="disabled", command=self.delete)
-        self.deleteBtn.grid(padx=10, row=0, column=2, sticky=W+E)
-
-        self.imgListLb = Label(self.listFrame, font=("", 14), text="画像情報")
-        self.imgListLb.grid(row=0, column=0, sticky=W+E)
-        
-        copyImgList = copy.deepcopy(imgList)
-        for i in range(len(copyImgList)):
-            copyImgList[i] = "{0:02d}→{1}".format(i, copyImgList[i])
-            
-        self.v_imgList = StringVar(value=copyImgList)
-        self.imgListBox = Listbox(self.listFrame, font=("", 14), listvariable=self.v_imgList)
-        self.imgListBox.grid(row=1, column=0, sticky=W+E)
-        self.imgListBox.bind('<<ListboxSelect>>', lambda e:self.buttonActive(e, 0, self.imgListBox.curselection()))
-
-        self.padLb = Label(self.listFrame, width=3)
-        self.padLb.grid(row=0, column=1, sticky=W+E)
-        
-        self.imgSizeListLb = Label(self.listFrame, font=("", 14), width=40, text="画像サイズ情報")
-        self.imgSizeListLb.grid(row=0, column=2, sticky=W+E)
-
-        copyImgSizeList = copy.deepcopy(imgSizeList)
-        for i in range(len(copyImgSizeList)):
-            copyImgSizeList[i] = "{0:02d}→img{1:02d}, {2}".format(i, copyImgSizeList[i][0], copyImgSizeList[i][1])
-            
-        self.v_imgSizeList = StringVar(value=copyImgSizeList)
-        self.imgSizeListBox = Listbox(self.listFrame, font=("", 14), listvariable=self.v_imgSizeList)
-        self.imgSizeListBox.grid(row=1, column=2, sticky=W+E)
-        self.imgSizeListBox.bind('<<ListboxSelect>>', lambda e:self.buttonActive(e, 1, self.imgSizeListBox.curselection()))
-
-        self.seListLb = Label(self.listFrame, font=("", 14), text="SE情報")
-        self.seListLb.grid(row=2, column=0, sticky=W+E)
-
-        copySeList = copy.deepcopy(seList)
-        for i in range(len(copySeList)):
-            copySeList[i] = "{0:02d}→{1} [{2}]".format(i, copySeList[i][0], copySeList[i][1])
-        
-        self.v_seList = StringVar(value=copySeList)
-        self.seListBox = Listbox(self.listFrame, font=("", 14), width=40, listvariable=self.v_seList)
-        self.seListBox.grid(row=3, column=0, sticky=W+E)
-        self.seListBox.bind('<<ListboxSelect>>', lambda e:self.buttonActive(e, 2, self.seListBox.curselection()))
-
-        self.padLb = Label(self.listFrame, width=3)
-        self.padLb.grid(row=2, column=1, sticky=W+E)
-        
-        self.bgmListLb = Label(self.listFrame, font=("", 14), text="BGM情報")
-        self.bgmListLb.grid(row=2, column=2, sticky=W+E)
-
-        copyBgmList = copy.deepcopy(bgmList)
-        for i in range(len(copyBgmList)):
-            copyBgmList[i] = "{0:02d}→{1} [{2}], [{3}, {4}]".format(i, copyBgmList[i][0], copyBgmList[i][1], copyBgmList[i][2], copyBgmList[i][3])
-        
-        self.v_bgmList = StringVar(value=copyBgmList)
-        self.bgmListBox = Listbox(self.listFrame, font=("", 14), listvariable=self.v_bgmList)
-        self.bgmListBox.grid(row=3, column=2, sticky=W+E)
-        self.bgmListBox.bind('<<ListboxSelect>>', lambda e:self.buttonActive(e, 3, self.bgmListBox.curselection()))
-
-    def modify(self):
-        if self.selectListNum == 0:
-            selectName = "画像情報"
-            if len(imgList) == 0:
-                errorMsg = "{0}に修正する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-        elif self.selectListNum == 1:
-            selectName = "画像サイズ情報"
-            if len(imgSizeList) == 0:
-                errorMsg = "{0}に修正する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-        elif self.selectListNum == 2:
-            selectName = "SE情報"
-            if len(seList) == 0:
-                errorMsg = "{0}に修正する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-        elif self.selectListNum == 3:
-            selectName = "BGM情報"
-            if len(bgmList) == 0:
-                errorMsg = "{0}に修正する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-            
-        headerFileEdit(root, "ヘッダー情報修正", self, self.selectListNum, self.selectIndex, "modify")
-
-    def insert(self):
-        headerFileEdit(root, "ヘッダー情報修正", self, self.selectListNum, self.selectIndex, "insert")
-
-    def delete(self):
-        if self.selectListNum == 0:
-            selectName = "画像情報"
-            if len(imgList) == 0:
-                errorMsg = "{0}に削除する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-        elif self.selectListNum == 1:
-            selectName = "画像サイズ情報"
-            if len(imgSizeList) == 0:
-                errorMsg = "{0}に削除する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-        elif self.selectListNum == 2:
-            selectName = "SE情報"
-            if len(seList) == 0:
-                errorMsg = "{0}に削除する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-        elif self.selectListNum == 3:
-            selectName = "BGM情報"
-            if len(bgmList) == 0:
-                errorMsg = "{0}に削除する項目はありません".format(selectName)
-                mb.showerror(title="エラー", message=errorMsg)
-                return
-
-        warnMsg = "{0}の{1}番目を削除します。\nそれでもよろしいですか？".format(selectName, self.selectIndex+1)
-        result = mb.askokcancel(title="警告", message=warnMsg, icon="warning", parent=self)
-
-        if result:
-            self.dirtyFlag = True
-            if self.selectListNum == 0:
-                imgList.pop(self.selectIndex)
-            elif self.selectListNum == 1:
-                imgSizeList.pop(self.selectIndex)
-            elif self.selectListNum == 2:
-                seList.pop(self.selectIndex)
-            elif self.selectListNum == 3:
-                bgmList.pop(self.selectIndex)
-
-            mb.showinfo(title="成功", message="ヘッダー情報を修正しました")
-
-            self.imgListBox.delete(0, END)
-            copyImgList = copy.deepcopy(imgList)
-            for i in range(len(copyImgList)):
-                copyImgList[i] = "{0:02d}→{1}".format(i, copyImgList[i])
-                self.imgListBox.insert(END, copyImgList[i])
-            
-            self.imgSizeListBox.delete(0, END)
-            copyImgSizeList = copy.deepcopy(imgSizeList)
-            for i in range(len(copyImgSizeList)):
-                copyImgSizeList[i] = "{0:02d}→img{1:02d}, {2}".format(i, copyImgSizeList[i][0], copyImgSizeList[i][1])
-                self.imgSizeListBox.insert(END, copyImgSizeList[i])
-
-            self.seListBox.delete(0, END)
-            copySeList = copy.deepcopy(seList)
-            for i in range(len(copySeList)):
-                copySeList[i] = "{0:02d}→{1} [{2}]".format(i, copySeList[i][0], copySeList[i][1])
-                self.seListBox.insert(END, copySeList[i])
-
-            self.bgmListBox.delete(0, END)
-            copyBgmList = copy.deepcopy(bgmList)
-            for i in range(len(copyBgmList)):
-                copyBgmList[i] = "{0:02d}→{1} [{2}], [{3}, {4}]".format(i, copyBgmList[i][0], copyBgmList[i][1], copyBgmList[i][2], copyBgmList[i][3])
-                self.bgmListBox.insert(END, copyBgmList[i])
-
-            if self.selectListNum == 0:
-                self.imgListBox.select_set(END)
-            elif self.selectListNum == 1:
-                self.imgSizeListBox.select_set(END)
-            elif self.selectListNum == 2:
-                self.seListBox.select_set(END)
-            elif self.selectListNum == 3:
-                self.bgmListBox.select_set(END)
-
-    def buttonActive(self, event, num, value):
-        self.selectListNum = num
-        self.insertBtn["state"] = "normal"
-
-        if len(value) == 0:
-            return
-        self.selectIndex = value[0]
-        self.modifyBtn["state"] = "normal"
-        self.deleteBtn["state"] = "normal"
-
-    def ok(self):
-        global file_path
-        global byteArr
-        global indexList
-        
-        if self.dirtyFlag:
-            result = mb.askokcancel(title="警告", message="変更を保存しますか？", icon="warning", parent=self)
-            if result:
-                index = 17
-                newByteArr = bytearray(byteArr[0:index])
-
-                newByteArr.append(len(imgList))
-                for i in range(len(imgList)):
-                    img = imgList[i].encode("shift-jis")
-                    newByteArr.append(len(img))
-                    newByteArr.extend(img)
-
-                newByteArr.append(len(imgSizeList))
-                for i in range(len(imgSizeList)):
-                    newByteArr.append(imgSizeList[i][0])
-                    for j in range(4):
-                        tempF = struct.pack("<f", imgSizeList[i][1][j])
-                        newByteArr.extend(tempF)
-
-                newByteArr.append(len(seList))
-                for i in range(len(seList)):
-                    se = seList[i][0].encode("shift-jis")
-                    newByteArr.append(len(se))
-                    newByteArr.extend(se)
-                    newByteArr.append(seList[i][1])
-
-                newByteArr.append(len(bgmList))
-                for i in range(len(bgmList)):
-                    bgm = bgmList[i][0].encode("shift-jis")
-                    newByteArr.append(len(bgm))
-                    newByteArr.extend(bgm)
-                    newByteArr.append(bgmList[i][1])
-                    startF = struct.pack("<f", bgmList[i][2])
-                    newByteArr.extend(startF)
-                    loopStartF = struct.pack("<f", bgmList[i][3])
-                    newByteArr.extend(loopStartF)
-
-                index = indexList[0]
-                index -= 3
-                newByteArr.extend(byteArr[index:])
-
-                errorMsg = "保存に失敗しました。\nファイルが他のプログラムによって開かれている\nまたは権限問題の可能性があります"
-                try:
-                    w = open(file_path, "wb")
-                    w.write(newByteArr)
-                    w.close()
-                    mb.showinfo(title="成功", message="スクリプトを改造しました")
-                    self.destroy()
-                    reloadFile()
-                except Exception as e:
-                    print(e)
-                    mb.showerror(title="保存エラー", message=errorMsg)
-                    
-        else:
-            self.destroy()
-        
-    def cancel(self):
-        global imgList
-        global imgSizeList
-        global seList
-        global bgmList
-        global originImgList
-        global originImgSizeList
-        global originSeList
-        global originBgmList
-        if self.dirtyFlag:
-            result = mb.askokcancel(title="警告", message="変更を取消しますか？", icon="warning", parent=self)
-            if result:
-                imgList = copy.deepcopy(originImgList)
-                imgSizeList = copy.deepcopy(originImgSizeList)
-                seList = copy.deepcopy(originSeList)
-                bgmList = copy.deepcopy(originBgmList)
-                
-                mb.showinfo(title="成功", message="変更を取消しました")
-                self.destroy()
-        else:
-            self.destroy()
-
-class headerFileEdit(sd.Dialog):
-    global imgList
-    global imgSizeList
-    global seList
-    global bgmList
-
-    def __init__(self, master, title, headerInfo, listNum, listIndex, mode):
-        self.selectListNum = listNum
-        self.selectIndex = listIndex
-        self.headerInfo = headerInfo
-        self.mode = mode
-        super(headerFileEdit, self).__init__(parent=master, title=title)
-
-    def body(self, frame):
-        self.posLb = ttk.Label(frame, text="変更する値", font=("", 12))
-        self.posLb.grid(columnspan=2, row=0, column=0, pady=5)
-        if self.selectListNum == 0:
-            self.imgLb = Label(frame, text="画像ファイル名", font=("", 12))
-            self.imgLb.grid(row=1, column=0)
-            self.v_img = StringVar()
-            if self.mode == "modify":
-                self.v_img.set(imgList[self.selectIndex])
-            self.imgEt = Entry(frame, textvariable=self.v_img, font=("", 12))
-            self.imgEt.grid(row=1, column=1)
-        elif self.selectListNum == 1:
-            self.imgIndexLb = Label(frame, text="画像ファイル\nINDEX", font=("", 12))
-            self.imgIndexLb.grid(row=1, column=0)
-            self.imgIndex_xLb = Label(frame, text="x座標", font=("", 12))
-            self.imgIndex_xLb.grid(row=2, column=0)
-            self.imgIndex_yLb = Label(frame, text="y座標", font=("", 12))
-            self.imgIndex_yLb.grid(row=3, column=0)
-            self.imgIndex_widthLb = Label(frame, text="横長さ", font=("", 12))
-            self.imgIndex_widthLb.grid(row=4, column=0)
-            self.imgIndex_heightLb = Label(frame, text="縦長さ", font=("", 12))
-            self.imgIndex_heightLb.grid(row=5, column=0)
-            self.v_imgIndex = IntVar()
-            self.v_imgIndex_x = IntVar()
-            self.v_imgIndex_y = IntVar()
-            self.v_imgIndex_width = IntVar()
-            self.v_imgIndex_height = IntVar()
-            if self.mode == "modify":
-                self.v_imgIndex.set(int(imgSizeList[self.selectIndex][0]))
-                self.v_imgIndex_x.set(int(imgSizeList[self.selectIndex][1][0]))
-                self.v_imgIndex_y.set(int(imgSizeList[self.selectIndex][1][1]))
-                self.v_imgIndex_width.set(int(imgSizeList[self.selectIndex][1][2]))
-                self.v_imgIndex_height.set(int(imgSizeList[self.selectIndex][1][3]))
-            self.imgIndexEt = Entry(frame, textvariable=self.v_imgIndex, font=("", 12))
-            self.imgIndexEt.grid(row=1, column=1)
-            self.imgIndex_xEt = Entry(frame, textvariable=self.v_imgIndex_x, font=("", 12))
-            self.imgIndex_xEt.grid(row=2, column=1)
-            self.imgIndex_yEt = Entry(frame, textvariable=self.v_imgIndex_y, font=("", 12))
-            self.imgIndex_yEt.grid(row=3, column=1)
-            self.imgIndex_widthEt = Entry(frame, textvariable=self.v_imgIndex_width, font=("", 12))
-            self.imgIndex_widthEt.grid(row=4, column=1)
-            self.imgIndex_heightEt = Entry(frame, textvariable=self.v_imgIndex_height, font=("", 12))
-            self.imgIndex_heightEt.grid(row=5, column=1)
-        elif self.selectListNum == 2:
-            self.seLb = Label(frame, text="SEファイル", font=("", 12))
-            self.seLb.grid(row=1, column=0)
-            self.seFileCntLb = Label(frame, text="グループ取得数", font=("", 12))
-            self.seFileCntLb.grid(row=2, column=0)
-            self.v_se = StringVar()
-            self.v_seFileCnt = IntVar()
-            if self.mode == "modify":
-                self.v_se.set(seList[self.selectIndex][0])
-                self.v_seFileCnt.set(int(seList[self.selectIndex][1]))
-            self.seEt = Entry(frame, textvariable=self.v_se, font=("", 12))
-            self.seEt.grid(row=1, column=1)
-            self.seFileCntEt = Entry(frame, textvariable=self.v_seFileCnt, font=("", 12))
-            self.seFileCntEt.grid(row=2, column=1)
-        elif self.selectListNum == 3:
-            self.bgmLb = Label(frame, text="BGMファイル", font=("", 12))
-            self.bgmLb.grid(row=1, column=0)
-            self.bgmLoopFlagLb = Label(frame, text="BGMループフラグ", font=("", 12))
-            self.bgmLoopFlagLb.grid(row=2, column=0)
-            self.bgmStartLb = Label(frame, text="BGM Start位置", font=("", 12))
-            self.bgmStartLb.grid(row=3, column=0)
-            self.bgmLoopStartLb = Label(frame, text="BGM Loop Start位置", font=("", 12))
-            self.bgmLoopStartLb.grid(row=4, column=0)
-            self.v_bgm = StringVar()
-            self.v_bgmLoopFlag = IntVar()
-            self.v_bgmStart = DoubleVar()
-            self.v_bgmLoopStart = DoubleVar()
-            if self.mode == "modify":
-                self.v_bgm.set(bgmList[self.selectIndex][0])
-                self.v_bgmLoopFlag.set(int(bgmList[self.selectIndex][1]))
-                self.v_bgmStart.set(bgmList[self.selectIndex][2])
-                self.v_bgmLoopStart.set(bgmList[self.selectIndex][3])
-            self.bgmEt = Entry(frame, textvariable=self.v_bgm, font=("", 12))
-            self.bgmEt.grid(row=1, column=1)
-            self.bgmLoopFlagCb = ttk.Combobox(frame, width=24, state="readonly", value=["ループしない", "ループする"])
-            self.bgmLoopFlagCb.grid(row=2, column=1)
-            self.bgmLoopFlagCb.current(self.v_bgmLoopFlag.get())
-            self.bgmStartEt = Entry(frame, textvariable=self.v_bgmStart, font=("", 12))
-            self.bgmStartEt.grid(row=3, column=1)
-            self.bgmLoopStartEt = Entry(frame, textvariable=self.v_bgmLoopStart, font=("", 12))
-            self.bgmLoopStartEt.grid(row=4, column=1)
-
-    def validate(self):
-        warnMsg = "ヘッダー情報を修正しますか？"
-        result = mb.askokcancel(message=warnMsg, icon="warning", parent=self)
-        if result:
-            try:
-                if self.selectListNum == 0:
-                    if self.mode == "modify":
-                        imgList[self.selectIndex] = self.v_img.get()
-                    elif self.mode == "insert":
-                        imgList.append(self.v_img.get())
-                elif self.selectListNum == 1:
-                    if self.mode == "modify":
-                        imgSizeList[self.selectIndex][0] = self.v_imgIndex.get()
-                        imgSizeList[self.selectIndex][1][0] = self.v_imgIndex_x.get()
-                        imgSizeList[self.selectIndex][1][1] = self.v_imgIndex_y.get()
-                        imgSizeList[self.selectIndex][1][2] = self.v_imgIndex_width.get()
-                        imgSizeList[self.selectIndex][1][3] = self.v_imgIndex_height.get()
-                    elif self.mode == "insert":
-                        imgSizeList.append([self.v_imgIndex.get(), [
-                                self.v_imgIndex_x.get(),
-                                self.v_imgIndex_y.get(),
-                                self.v_imgIndex_width.get(),
-                                self.v_imgIndex_height.get()
-                            ]
-                        ])
-                elif self.selectListNum == 2:
-                    if self.mode == "modify":
-                        seList[self.selectIndex][0] = self.v_se.get()
-                        seList[self.selectIndex][1] = self.v_seFileCnt.get()
-                    elif self.mode == "insert":
-                        seList.append([self.v_se.get(), self.v_seFileCnt.get()])
-                elif self.selectListNum == 3:
-                    if self.mode == "modify":
-                        bgmList[self.selectIndex][0] = self.v_bgm.get()
-                        bgmList[self.selectIndex][1] = int(self.bgmLoopFlagCb.current())
-                        bgmList[self.selectIndex][2] = self.v_bgmStart.get()
-                        bgmList[self.selectIndex][3] = self.v_bgmLoopStart.get()
-                    elif self.mode == "insert":
-                        bgmList.append([self.v_bgm.get(),
-                                        int(self.bgmLoopFlagCb.current()),
-                                        self.v_bgmStart.get(),
-                                        self.v_bgmLoopStart.get()
-                        ])
-
-                return True
-            except:
-                errorMsg = "不正な値があります"
-                mb.showerror(title="エラー", message=errorMsg)
-                return False
-
-    def apply(self):
-        self.headerInfo.dirtyFlag = True
-        mb.showinfo(title="成功", message="ヘッダー情報を修正しました")
-
-        self.headerInfo.imgListBox.delete(0, END)
-        copyImgList = copy.deepcopy(imgList)
-        for i in range(len(copyImgList)):
-            copyImgList[i] = "{0:02d}→{1}".format(i, copyImgList[i])
-            self.headerInfo.imgListBox.insert(END, copyImgList[i])
-
-        self.headerInfo.imgSizeListBox.delete(0, END)
-        copyImgSizeList = copy.deepcopy(imgSizeList)
-        for i in range(len(copyImgSizeList)):
-            copyImgSizeList[i] = "{0:02d}→img{1:02d}, {2}".format(i, copyImgSizeList[i][0], copyImgSizeList[i][1])
-            self.headerInfo.imgSizeListBox.insert(END, copyImgSizeList[i])
-
-        self.headerInfo.seListBox.delete(0, END)
-        copySeList = copy.deepcopy(seList)
-        for i in range(len(copySeList)):
-            copySeList[i] = "{0:02d}→{1} [{2}]".format(i, copySeList[i][0], copySeList[i][1])
-            self.headerInfo.seListBox.insert(END, copySeList[i])
-
-        self.headerInfo.bgmListBox.delete(0, END)
-        copyBgmList = copy.deepcopy(bgmList)
-        for i in range(len(copyBgmList)):
-            copyBgmList[i] = "{0:02d}→{1} [{2}], [{3}, {4}]".format(i, copyBgmList[i][0], copyBgmList[i][1], copyBgmList[i][2], copyBgmList[i][3])
-            self.headerInfo.bgmListBox.insert(END, copyBgmList[i])
-
-def decryptScript(line):
-    global imgList
-    global imgSizeList
-    global seList
-    global bgmList
-    global originImgList
-    global originImgSizeList
-    global originSeList
-    global originBgmList
-    global comicDataList
-    global indexList
-    global max_param
-    size = len(line)
-    index = 16
-    header = line[0:index]
-    if header != b'DEND_COMICSCRIPT':
-        raise Exception
-    index += 1
-
-    imgCnt = line[index]
-    index += 1
-    for i in range(imgCnt):
-        b = line[index]
-        index += 1
-        imgName = line[index:index+b].decode("shift-jis")
-        index += b
-        imgList.append(imgName)
-
-    originImgList = copy.deepcopy(imgList)
-
-    imgSizeCnt = line[index]
-    index += 1
-    for i in range(imgSizeCnt):
-        imgIndex = line[index]
-        index += 1
-        imgSizeInfo = []
-        for j in range(4):
-            tempF = struct.unpack("<f", line[index:index+4])[0]
-            tempF = int(round(tempF, 5))
-            imgSizeInfo.append(tempF)
-            index += 4
-        imgSizeList.append([imgIndex, imgSizeInfo])
-
-    originImgSizeList = copy.deepcopy(imgSizeList)
-
-    seCnt = line[index]
-    index += 1
-    for i in range(seCnt):
-        b = line[index]
-        index += 1
-        seName = line[index:index+b].decode("shift-jis")
-        index += b
-        seFileCnt = line[index]
-        index += 1
-        seList.append([seName, seFileCnt])
-
-    originSeList = copy.deepcopy(seList)
-
-    bgmCnt = line[index]
-    index += 1
-    for i in range(bgmCnt):
-        b = line[index]
-        index += 1
-        bgmName = line[index:index+b].decode("shift-jis")
-        index += b
-        bgmFileCnt = line[index]
-        index += 1
-        start = struct.unpack("<f", line[index:index+4])[0]
-        start = round(start, 5)
-        index += 4
-        loopStart = struct.unpack("<f", line[index:index+4])[0]
-        loopStart = round(loopStart, 5)
-        index += 4
-        bgmList.append([bgmName, bgmFileCnt, start, loopStart])
-
-    originBgmList = copy.deepcopy(bgmList)
-
-    index += 1
-    comicDataCnt = struct.unpack("<h", line[index:index+2])[0]
-    index += 2
-    
-    count = 0
-    for i in range(comicDataCnt):
-        indexList.append(index)
-        if index >= size:
-            errorMsg = "注意！設定したコマンド数({0})は、書き込んだコマンド数({1})より多く読もうとしています。".format(comicDataCnt, count)
-            mb.showerror(title="エラー", message=errorMsg)
-            return None
-        comicData = []
-        num2 = struct.unpack("<h", line[index:index+2])[0]
-        index += 2
-        if num2 < 0 or num2 >= len(cmd)-1:
-            errorMsg = "定義されてないコマンド番号です({0})。読込を終了します。".format(num2)
-            mb.showerror(title="エラー", message=errorMsg)
-            return None
-        comicData.append(cmd[num2])
-        b = line[index]
-        index += 1
-        if b >= 16:
-            b = 16
-        if max_param < b:
-            max_param = b
-        comicData.append(b)
-        for j in range(b):
-            f = struct.unpack("<f", line[index:index+4])[0]
-            index += 4
-            f = round(f, 5)
-            comicData.append(f)
-        
-        comicDataList.append(comicData)
-
-def createWidget():
-    global comicDataList
-    global max_param
-    global frame
-    frame = Scrollbarframe(scriptLf)
-
-    col_tuple = ('番号', 'コマンド名')
-    paramList = []
-    for i in range(max_param):
-        paramList.append("param{0}".format(i+1))
-    col_tuple = col_tuple + tuple(paramList)
-
-    frame.tree['columns'] = col_tuple
-    
-    frame.tree.column('#0',width=0, stretch='no')
-    frame.tree.column('番号', anchor=CENTER, width=50)
-    frame.tree.column('コマンド名',anchor=CENTER, width=120)
-    for i in range(max_param):
-        col_name = "param{0}".format(i+1)
-        frame.tree.column(col_name, anchor=CENTER, width=100)
-
-    frame.tree.heading('番号', text='番号',anchor=CENTER)
-    frame.tree.heading('コマンド名', text='コマンド名', anchor=CENTER)
-    for i in range(max_param):
-        col_name = "param{0}".format(i+1)
-        frame.tree.heading(col_name,text=col_name, anchor=CENTER)
-
-    index = 0
-    for comicData in comicDataList:
-        data = (index, comicData[0])
-        paramCnt = comicData[1]
-        paramList = []
-        for i in range(paramCnt):
-            paramList.append(comicData[2+i])
-        data = data + tuple(paramList)
-        frame.tree.insert(parent='', index='end', iid=index ,values=data)
-        index += 1
-
 def openFile():
-    global byteArr
-    global file_path
+    global decryptFile
     file_path = fd.askopenfilename(filetypes=[("COMIC_SCRIPT", "COMIC*.BIN")])
 
     errorMsg = "予想外のエラーが出ました。\n電車でDのコミックスクリプトではない、またはファイルが壊れた可能性があります。"
@@ -1413,38 +613,105 @@ def openFile():
         try:
             filename = os.path.basename(file_path)
             v_fileName.set(filename)
-            file = open(file_path, "rb")
-            line = file.read()
-            byteArr = bytearray(line)
+            del decryptFile
+            decryptFile = ComicDecrypt(file_path, cmdList)
+            if not decryptFile.open():
+                decryptFile.printError()
+                mb.showerror(title="エラー", message=errorMsg)
+                return
+            
             deleteWidget()
-            decryptScript(line)
             createWidget()
-            file.close()
         except Exception as e:
-            print(e)
+            print(traceback.format_exc())
             mb.showerror(title="エラー", message=errorMsg)
 
+def createWidget():
+    global decryptFile
+    global frame
+
+    btnList = [
+        editLineBtn,
+        insertLineBtn,
+        deleteLineBtn,
+        copyLineBtn,
+        csvExtractBtn,
+        csvLoadAndSaveBtn,
+        headerFileEditBtn
+    ]
+    frame = ScrollbarFrame(scriptLf, v_select, btnList)
+
+    col_tuple = ('番号', 'コマンド名')
+    paramList = []
+    for i in range(decryptFile.max_param):
+        paramList.append("param{0}".format(i+1))
+    col_tuple = col_tuple + tuple(paramList)
+
+    frame.tree['columns'] = col_tuple
+    frame.tree.column('#0',width=0, stretch='no')
+    
+    frame.tree.column('番号', anchor=CENTER, width=50)
+    frame.tree.column('コマンド名',anchor=CENTER, width=120)
+    frame.tree.heading('番号', text='番号',anchor=CENTER)
+    frame.tree.heading('コマンド名', text='コマンド名', anchor=CENTER)
+    
+    for i in range(decryptFile.max_param):
+        col_name = "param{0}".format(i+1)
+        frame.tree.column(col_name, anchor=CENTER, width=100)
+        frame.tree.heading(col_name,text=col_name, anchor=CENTER)
+
+    num = 0
+    for comicData in decryptFile.comicDataList:
+        data = (num, comicData[0])
+        paramCnt = comicData[1]
+        paramList = []
+        for i in range(paramCnt):
+            paramList.append(comicData[2+i])
+        data = data + tuple(paramList)
+        frame.tree.insert(parent='', index='end', iid=num ,values=data)
+        num += 1
+    return num
+        
+def deleteWidget():
+    children = scriptLf.winfo_children()
+    for child in children:
+        child.destroy()
+
+    v_select.set("")
+    editLineBtn["state"] = "disabled"
+    insertLineBtn["state"] = "disabled"
+    deleteLineBtn["state"] = "disabled"
+
 def editLine():
+    global decryptFile
     global frame
     selectId = frame.tree.selection()[0]
     selectItem = frame.tree.set(selectId)
-    inputDialog(root, int(selectItem["番号"]), selectItem)
+    result = InputDialog(root, "コマンド修正", decryptFile, int(selectItem["番号"]), selectItem)
+    if result.reloadFlag:
+        reloadFile()
 
 def insertLine():
     global frame
     selectId = frame.tree.selection()[0]
     selectItem = frame.tree.set(selectId)
-    inputDialog(root, int(selectItem["番号"]))
+    result = InputDialog(root, "コマンド挿入", decryptFile, int(selectItem["番号"]))
+    if result.reloadFlag:
+        reloadFile()
 
 def deleteLine():
     global frame
-    global comicDataList
     selectId = int(frame.tree.selection()[0])
     warnMsg = "選択した行を削除します。\nそれでもよろしいですか？"
     result = mb.askokcancel(title="警告", message=warnMsg, icon="warning")
     if result:
-        del comicDataList[selectId]
-        saveFile(comicDataList)
+        if not decryptFile.saveFile("delete", selectId, None):
+            decryptFile.printError()
+            errorMsg = "保存に失敗しました。\nファイルが他のプログラムによって開かれている\nまたは権限問題の可能性があります"
+            mb.showerror(title="保存エラー", message=errorMsg)
+            return
+        mb.showinfo(title="成功", message="スクリプトを改造しました")
+        reloadFile()
 
 def copyLine():
     global frame
@@ -1461,90 +728,51 @@ def copyLine():
     copyComicData = copy.deepcopy(comicData)
 
     mb.showinfo(title="成功", message="コピーしました")
-    pasteLineBtn['state'] = 'normal'
+    pasteLineBtn["state"] = "normal"
 
 def pasteLine():
+    global decryptFile
     global frame
+    global copyComicData
     selectId = frame.tree.selection()[0]
     selectItem = frame.tree.set(selectId)
     num = int(selectItem["番号"])
-    pasteDialog(root, num)
-        
-
-def saveFile(comicDataList):
-    global byteArr
-    global file_path
-    newByteArr = copy.deepcopy(byteArr)
-    index = indexList[0]
-    index -= 2
-    newByteArr = newByteArr[0:index]
-
-    cmdCnt = struct.pack("<h", len(comicDataList))
-    for n in cmdCnt:
-        newByteArr.insert(index, n)
-        index += 1
-
-    for comicData in comicDataList:
-        cmdNum = struct.pack("<h", cmd.index(comicData[0]))
-        for n in cmdNum:
-            newByteArr.insert(index, n)
-            index += 1
-
-        paramCnt = comicData[1]
-        byteParam = struct.pack("<c", paramCnt.to_bytes(1, 'big'))
-        for n in byteParam:
-            newByteArr.insert(index, n)
-            index += 1
-
-        for i in range(paramCnt):
-            f = struct.pack("<f", comicData[2+i])
-            for n in f:
-                newByteArr.insert(index, n)
-                index += 1
-
-    errorMsg = "保存に失敗しました。\nファイルが他のプログラムによって開かれている\nまたは権限問題の可能性があります"
-    try:
-        w = open(file_path, "wb")
-        w.write(newByteArr)
-        w.close()
-        mb.showinfo(title="成功", message="スクリプトを改造しました")
+    result = PasteDialog(root, "コマンドコピー", decryptFile, num, copyComicData)
+    if result.reloadFlag:
         reloadFile()
-    except Exception as e:
-        print(e)
-        mb.showerror(title="保存エラー", message=errorMsg)
 
 def reloadFile():
-    global byteArr
+    global decryptFile
     global frame
-    global file_path
     errorMsg = "予想外のエラーが出ました。\n電車でDのコミックスクリプトではない、またはファイルが壊れた可能性があります。"
-    if file_path:
+    if decryptFile.filePath:
         try:
-            selectId = -1
-            filename = os.path.basename(file_path)
-            v_fileName.set(filename)
-            file = open(file_path, "rb")
-            line = file.read()
-            byteArr = bytearray(line)
-            if v_select.get():
+            if not decryptFile.open():
+                decryptFile.printError()
+                mb.showerror(title="エラー", message=errorMsg)
+                return
+
+            selectId = None
+            if v_select.get() != "":
                 selectId = int(v_select.get())
+                
             deleteWidget()
-            decryptScript(line)
-            createWidget()
-            file.close()
-            if selectId != -1:
+            maxIndex = createWidget()
+            if selectId != None:
+                if selectId >= maxIndex:
+                    selectId = maxIndex - 1
                 if selectId - 3 < 0:
                     frame.tree.see(0)
                 else:
-                    frame.tree.see(selectId-3)
+                    frame.tree.see(selectId - 3)
                 frame.tree.selection_set(selectId)
-        except Exception as e:
-            print(e)
+        except Exception:
+            print(traceback.format_exc())
             mb.showerror(title="エラー", message=errorMsg)
 
 
 def csvExtractBtn():
-    global comicDataList
+    global decryptFile
     file = v_fileName.get()
     filename = os.path.splitext(os.path.basename(file))[0]
     file_path = fd.asksaveasfilename(initialfile=filename, defaultextension='csv', filetypes=[('comicscript_csv', '*.csv')])
@@ -1552,7 +780,7 @@ def csvExtractBtn():
     if file_path:
         try:
             w = open(file_path, "w")
-            for comicData in comicDataList:
+            for comicData in decryptFile.comicDataList:
                 w.write("{0},".format(comicData[0]))
                 cmdParaCnt = comicData[1]
                 for i in range(cmdParaCnt):
@@ -1568,7 +796,7 @@ def csvExtractBtn():
         
 
 def csvLoadAndSaveBtn():
-    global comicDataList
+    global decryptFile
     file_path = fd.askopenfilename(defaultextension='csv', filetypes=[("comicscript_csv", "*.csv")])
     if not file_path:
         return
@@ -1582,7 +810,7 @@ def csvLoadAndSaveBtn():
         csvLine = csvLines[i].strip()
         arr = csvLine.split(",")
         cmdName = arr[0]
-        if cmdName not in cmd:
+        if cmdName not in cmdList:
             errorMsg = "{0}行目のコマンド[{1}]は\n存在しないコマンドです".format(i+1, cmdName)
             mb.showerror(title="エラー", message=errorMsg)
             break
@@ -1609,14 +837,22 @@ def csvLoadAndSaveBtn():
     result = mb.askokcancel(title="警告", message=warnMsg, icon="warning")
 
     if result:
-        comicDataList = csvComicDataList
-        saveFile(comicDataList)
+        if not decryptFile.saveComicList(csvComicDataList):
+            decryptFile.printError()
+            errorMsg = "保存に失敗しました。\nファイルが他のプログラムによって開かれている\nまたは権限問題の可能性があります"
+            mb.showerror(title="保存エラー", message=errorMsg)
+            return
+        mb.showinfo(title="成功", message="スクリプトを改造しました")
+        reloadFile()
 
 def headerFileEditBtn():
-    headerFileInfo(root, "ヘッダー情報")
+    global decryptFile
+    result = HeaderFileInfo(root, "ヘッダー情報", decryptFile)
+    if result.reloadFlag:
+        reloadFile()
 
 root = Tk()
-root.title("電車でD ComicScript 改造 1.3.2")
+root.title("電車でD ComicScript 改造 1.3.3")
 root.geometry("900x600")
 
 menubar = Menu(root)
@@ -1660,28 +896,5 @@ headerFileEditBtn.place(relx=0.76, rely=0.19)
 
 scriptLf = ttk.LabelFrame(root, text="スクリプト内容")
 scriptLf.place(relx=0.05, rely=0.25, relwidth=0.9, relheight=0.70)
-
-def deleteWidget():
-    global scriptLf
-    global imgList
-    global imgSizeList
-    global seList
-    global bgmList
-    global comicDataList
-    global indexList
-    children = scriptLf.winfo_children()
-    for child in children:
-        child.destroy()
-
-    imgList = []
-    imgSizeList = []
-    seList = []
-    bgmList = []
-    comicDataList = []
-    indexList = []
-    v_select.set("")
-    editLineBtn['state'] = 'disabled'
-    insertLineBtn['state'] = 'disabled'
-    deleteLineBtn['state'] = 'disabled'
 
 root.mainloop()
