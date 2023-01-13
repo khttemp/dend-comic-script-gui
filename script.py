@@ -3,12 +3,15 @@
 import os
 import copy
 import traceback
+
+import tkinter
+from tkinter import ttk
 from tkinter import filedialog as fd
 from tkinter import messagebox as mb
 
-from importPy.tkinterScrollbarFrameClass import *
-from importPy.tkinterEditClass import *
-from importPy.decrypt import *
+from importPy.tkinterScrollbarFrameClass import ScrollbarFrame
+from importPy.tkinterEditClass import InputDialog, PasteDialog, HeaderFileInfo
+from importPy.decrypt import ComicDecrypt
 
 decryptFile = None
 frame = None
@@ -604,6 +607,7 @@ cmdList = [
     "SCRIPT_CMD_MAX"
 ]
 
+
 def openFile():
     global decryptFile
     file_path = fd.askopenfilename(filetypes=[("COMIC_SCRIPT", "COMIC*.BIN")])
@@ -619,12 +623,12 @@ def openFile():
                 decryptFile.printError()
                 mb.showerror(title="エラー", message=errorMsg)
                 return
-            
             deleteWidget()
             createWidget()
-        except Exception as e:
+        except Exception:
             print(traceback.format_exc())
             mb.showerror(title="エラー", message=errorMsg)
+
 
 def createWidget():
     global decryptFile
@@ -648,17 +652,17 @@ def createWidget():
     col_tuple = col_tuple + tuple(paramList)
 
     frame.tree['columns'] = col_tuple
-    frame.tree.column('#0',width=0, stretch='no')
-    
-    frame.tree.column('番号', anchor=CENTER, width=50)
-    frame.tree.column('コマンド名',anchor=CENTER, width=120)
-    frame.tree.heading('番号', text='番号',anchor=CENTER)
-    frame.tree.heading('コマンド名', text='コマンド名', anchor=CENTER)
-    
+    frame.tree.column('#0', width=0, stretch='no')
+
+    frame.tree.column('番号', anchor=tkinter.CENTER, width=50)
+    frame.tree.column('コマンド名', anchor=tkinter.CENTER, width=120)
+    frame.tree.heading('番号', text='番号', anchor=tkinter.CENTER)
+    frame.tree.heading('コマンド名', text='コマンド名', anchor=tkinter.CENTER)
+
     for i in range(decryptFile.max_param):
         col_name = "param{0}".format(i+1)
-        frame.tree.column(col_name, anchor=CENTER, width=100)
-        frame.tree.heading(col_name,text=col_name, anchor=CENTER)
+        frame.tree.column(col_name, anchor=tkinter.CENTER, width=100)
+        frame.tree.heading(col_name, text=col_name, anchor=tkinter.CENTER)
 
     num = 0
     for comicData in decryptFile.comicDataList:
@@ -668,10 +672,11 @@ def createWidget():
         for i in range(paramCnt):
             paramList.append(comicData[2+i])
         data = data + tuple(paramList)
-        frame.tree.insert(parent='', index='end', iid=num ,values=data)
+        frame.tree.insert(parent='', index='end', iid=num, values=data)
         num += 1
     return num
-        
+
+
 def deleteWidget():
     children = scriptLf.winfo_children()
     for child in children:
@@ -682,6 +687,7 @@ def deleteWidget():
     insertLineBtn["state"] = "disabled"
     deleteLineBtn["state"] = "disabled"
 
+
 def editLine():
     global decryptFile
     global frame
@@ -691,6 +697,7 @@ def editLine():
     if result.reloadFlag:
         reloadFile()
 
+
 def insertLine():
     global frame
     selectId = frame.tree.selection()[0]
@@ -698,6 +705,7 @@ def insertLine():
     result = InputDialog(root, "コマンド挿入", decryptFile, int(selectItem["番号"]))
     if result.reloadFlag:
         reloadFile()
+
 
 def deleteLine():
     global frame
@@ -712,6 +720,7 @@ def deleteLine():
             return
         mb.showinfo(title="成功", message="スクリプトを改造しました")
         reloadFile()
+
 
 def copyLine():
     global frame
@@ -730,6 +739,7 @@ def copyLine():
     mb.showinfo(title="成功", message="コピーしました")
     pasteLineBtn["state"] = "normal"
 
+
 def pasteLine():
     global decryptFile
     global frame
@@ -740,6 +750,7 @@ def pasteLine():
     result = PasteDialog(root, "コマンドコピー", decryptFile, num, copyComicData)
     if result.reloadFlag:
         reloadFile()
+
 
 def reloadFile():
     global decryptFile
@@ -755,10 +766,10 @@ def reloadFile():
             selectId = None
             if v_select.get() != "":
                 selectId = int(v_select.get())
-                
+
             deleteWidget()
             maxIndex = createWidget()
-            if selectId != None:
+            if selectId is not None:
                 if selectId >= maxIndex:
                     selectId = maxIndex - 1
                 if selectId - 3 < 0:
@@ -793,7 +804,7 @@ def csvExtractBtn():
         except Exception as e:
             print(e)
             mb.showerror(title="エラー", message=errorMsg)
-        
+
 
 def csvLoadAndSaveBtn():
     global decryptFile
@@ -813,7 +824,7 @@ def csvLoadAndSaveBtn():
         if cmdName not in cmdList:
             errorMsg = "{0}行目のコマンド[{1}]は\n存在しないコマンドです".format(i+1, cmdName)
             mb.showerror(title="エラー", message=errorMsg)
-            break
+            return
 
         comicDataParaList = []
         for j in range(1, len(arr)):
@@ -821,7 +832,7 @@ def csvLoadAndSaveBtn():
                 break
             try:
                 comicDataParaList.append(float(arr[j]))
-            except:
+            except Exception:
                 errorMsg = "{0}行目のコマンドに\n数字に変換できない要素[{1}]が入ってます".format(i+1, arr[j])
                 mb.showerror(title="エラー", message=errorMsg)
                 return
@@ -845,29 +856,31 @@ def csvLoadAndSaveBtn():
         mb.showinfo(title="成功", message="スクリプトを改造しました")
         reloadFile()
 
+
 def headerFileEditBtn():
     global decryptFile
     result = HeaderFileInfo(root, "ヘッダー情報", decryptFile)
     if result.reloadFlag:
         reloadFile()
 
-root = Tk()
+
+root = tkinter.Tk()
 root.title("電車でD ComicScript 改造 1.3.3")
 root.geometry("900x600")
 
-menubar = Menu(root)
-menubar.add_cascade(label='ファイルを開く', command= lambda: openFile())
+menubar = tkinter.Menu(root)
+menubar.add_cascade(label='ファイルを開く', command=lambda: openFile())
 root.config(menu=menubar)
 
-v_fileName = StringVar()
-fileNameEt = ttk.Entry(root, textvariable=v_fileName, font=("",14), width=20, state="readonly", justify="center")
+v_fileName = tkinter.StringVar()
+fileNameEt = ttk.Entry(root, textvariable=v_fileName, font=("", 14), width=20, state="readonly", justify="center")
 fileNameEt.place(relx=0.053, rely=0.03)
 
-selectLb = ttk.Label(text="選択した行番号：", font=("",14))
+selectLb = ttk.Label(text="選択した行番号：", font=("", 14))
 selectLb.place(relx=0.05, rely=0.11)
 
-v_select = StringVar()
-selectEt = ttk.Entry(root, textvariable=v_select, font=("",14), width=5, state="readonly", justify="center")
+v_select = tkinter.StringVar()
+selectEt = ttk.Entry(root, textvariable=v_select, font=("", 14), width=5, state="readonly", justify="center")
 selectEt.place(relx=0.22, rely=0.11)
 
 editLineBtn = ttk.Button(root, text="選択した行を修正する", width=25, state="disabled", command=editLine)

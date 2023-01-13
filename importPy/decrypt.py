@@ -1,12 +1,11 @@
-import os
 import struct
-import copy
 import traceback
 
 from tkinter import messagebox as mb
 
+
 class ComicDecrypt:
-    def __init__ (self, filePath, cmdList):
+    def __init__(self, filePath, cmdList):
         self.filePath = filePath
         self.cmdList = cmdList
         self.comicCntIndex = 0
@@ -30,15 +29,15 @@ class ComicDecrypt:
             if not self.decrypt():
                 return False
             return True
-        except Exception as e:
+        except Exception:
             self.error = traceback.format_exc()
             return False
-        
+
     def printError(self):
         f = open("error_log.txt", "w")
         f.write(self.error)
         f.close()
-    
+
     def decrypt(self):
         index = 16
         header = self.byteArr[0:index]
@@ -69,7 +68,7 @@ class ComicDecrypt:
                 imgSizeInfo.append(tempF)
                 index += 4
             self.imgSizeList.append([imgIndex, imgSizeInfo])
-            
+
         self.seList = []
         seCnt = self.byteArr[index]
         index += 1
@@ -107,7 +106,7 @@ class ComicDecrypt:
 
         self.indexList = []
         self.comicDataList = []
-        count = 0
+
         for i in range(comicDataCnt):
             self.indexList.append(index)
             comicData = []
@@ -130,7 +129,7 @@ class ComicDecrypt:
                 index += 4
                 f = round(f, 5)
                 comicData.append(f)
-            
+
             self.comicDataList.append(comicData)
         return True
 
@@ -176,7 +175,7 @@ class ComicDecrypt:
         except Exception:
             self.error = traceback.format_exc()
             return False
-    
+
     def saveFile(self, mode, num, comicData):
         try:
             if num >= len(self.indexList):
@@ -218,13 +217,13 @@ class ComicDecrypt:
                 if num < len(self.indexList) - 1:
                     index = self.indexList[num + 1]
                     newByteArr.extend(self.byteArr[index:])
-                
+
                 index = self.comicCntIndex
                 comicCnt = struct.pack("<h", len(self.comicDataList) - 1)
                 for n in comicCnt:
                     newByteArr[index] = n
                     index += 1
-                    
+
             self.byteArr = newByteArr
             self.save()
             return True
@@ -249,14 +248,14 @@ class ComicDecrypt:
                 for i in range(paramCnt):
                     f = struct.pack("<f", comicData[2+i])
                     newByteArr.extend(f)
-            
+
             self.byteArr = newByteArr
             self.save()
             return True
         except Exception:
             self.error = traceback.format_exc()
             return False
-            
+
     def save(self):
         w = open(self.filePath, "wb")
         w.write(self.byteArr)

@@ -5,3 +5,4 @@ dist
 *.BIN
 *.bat
 *.txt
+*.exe
